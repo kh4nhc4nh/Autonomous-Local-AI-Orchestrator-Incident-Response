@@ -4,37 +4,44 @@
 
 ---
 
-## 🏗️ Kiến Trúc Hệ Thống (3 Thiết Bị)
+## 🏗️ Kiến Trúc Hệ Thống & Luồng Dữ Liệu
 
-Hệ thống được thiết kế theo mô hình phân tán thực chiến, mô phỏng đúng hạ tầng mạng doanh nghiệp:
+Hệ thống được thiết kế theo mô hình phân tán thực chiến, mô phỏng đúng hạ tầng mạng của các trung tâm điều hành an ninh mạng (SOC) doanh nghiệp:
 
-```
-┌─────────────────────────────────┐
-│     Wazuh Manager (Ubuntu)       │  (192.168.100.220)
-│   • API Management: Port 55000  │
-│   • Indexer Alerts: Port 9200   │
-└────────────────┬────────────────┘
-                 │ (1) Kéo Alert mới nhất theo thời gian thực (Polling 3s)
-                 ▼
-┌─────────────────────────────────┐
-│     MÁY CHỦ: ARGUS ORCHESTRATOR │  (Chạy Python cực nhẹ ~30MB RAM)
-│   • Lọc rác & Tối ưu hóa Token  │
-│   • State Tracker (5-min window)│
-└────────────────┬────────────────┘
-                 │ (2) Gửi Alert Context qua mạng LAN nội bộ (Port 11434)
-                 ▼
-┌─────────────────────────────────┐
-│     MÁY AI: OLLAMA SERVER       │  (192.168.100.101)
-│   • Model: Qwen2.5-3B (Local)   │
-│   • Phân tích & Dự đoán hành vi │
-└────────────────┬────────────────┘
-                 │ (3) Bắn báo cáo hành động trực tiếp
-                 ▼
-┌─────────────────────────────────┐
-│     TELEGRAM BOT NOTIFIER       │ ──► [Điện thoại / Laptop của SOC Analyst]
-│   • @khanh_soc_ai_bot           │
-└─────────────────────────────────┘
-```
+### 📊 Sơ Đồ Luồng Hoạt Động & Kiến Trúc Tổng Thể (Workflow Architecture)
+
+![AI-SOC Wazuh Workflow Architecture](./image/AI-SOC%20Wazuh%20Workflow%20Architecture.png)
+
+#### 🔍 Phân Tích Chuyên Sâu Các Phân Vùng Trong Sơ Đồ:
+
+1. **MÁY A – SOC SERVER (Ubuntu Server - `192.168.100.220`):**
+   * **Wazuh Core:**
+     * *Wazuh Manager (Port 55000):* Quản lý trạng thái và chính sách bảo mật cho toàn bộ Agents.
+     * *Wazuh Indexer / OpenSearch (Port 9200):* Lưu trữ, đánh chỉ mục và truy vấn toàn bộ security alerts.
+     * *Wazuh Dashboard (Port 443):* Giao diện trực quan hóa dữ liệu và điều tra sự cố.
+   * **Local AI Engine (Ollama - `192.168.100.101:11434`):** Chạy mô hình ngôn ngữ lớn `qwen2.5:3b` chuyên dụng phân tích mã độc hoàn toàn trong mạng LAN nội bộ, bảo mật tuyệt đối không gửi dữ liệu ra ngoài Internet.
+   * **Python Orchestrator (Trung tâm điều phối):**
+     * *Collectors:* Kéo dữ liệu tự động từ Wazuh Indexer & API theo chu kỳ 3 giây.
+     * *Processors:* Bóc tách sâu Windows/Linux events, lọc sạch 85% log rác, duy trì bộ nhớ trượt 5 phút xâu chuỗi tấn công.
+     * *AI Analysis & Sanitization:* Đưa prompt có cấu trúc sang AI và chuẩn hóa phản hồi.
+     * *Notification:* Gửi bản tin Markdown tức thì về điện thoại qua Telegram Bot.
+   * **Database (SQLite):** Lưu vết các sự cố, lịch sử phân tích và trạng thái xử lý của từng cảnh báo.
+   * **Telegram Bot Notifier (`@khanh_soc_ai_bot`):** Bắn báo động đỏ trực tiếp tới điện thoại/laptop của SOC Analyst.
+
+2. **MÁY B – ENDPOINT / ATTACK LAB (Windows 10 Pro - `192.168.100.27`):**
+   * **Wazuh Agent:** Thu thập và đẩy toàn bộ sự kiện hệ thống về Wazuh Manager theo thời gian thực.
+   * **Microsoft Sysmon & Windows Event Logs:** Ghi nhận chuyên sâu các sự kiện: tạo tiến trình (Process Creation), kết nối mạng (Network Connections), thao tác tệp tin (File Events), và các nhật ký Security/System/Application.
+   * **Attack Simulation (Môi trường giả lập tấn công):** Nơi thực thi các công cụ kiểm thử xâm nhập thực tế: Atomic Red Team, PowerShell Exploitation, Nmap, tạo tài khoản ngầm, leo quyền Admin, xóa log.
+
+3. **QUY TRÌNH 6 BƯỚC CỦA AI-SOC WORKFLOW:**
+   * **Bước 1 (Event Collection):** Kéo các alert mới phát sinh kèm bằng chứng (evidence) từ Wazuh Indexer (Port 9200).
+   * **Bước 2 (Normalization & Deduplication):** Chuẩn hóa cấu trúc dữ liệu, khử trùng lặp và loại bỏ các log ồn ào vô hại (Noise filter).
+   * **Bước 3 (Correlation & Context):** Kết hợp nhiều alert liên tiếp trên cùng một máy mục tiêu trong cửa sổ 5 phút để xây dựng ngữ cảnh chiến dịch (Incident Context).
+   * **Bước 4 (AI Analysis - Ollama + Qwen):** Đánh giá True/False Positive, giải mã ý đồ của kẻ xâm nhập, gán nhãn ma trận MITRE ATT&CK và đề xuất phương án ứng cứu.
+   * **Bước 5 (Validation & Risk Assessment):** Kiểm định tính hợp lệ của phân tích, đánh giá mức độ nghiêm trọng (Severity) và độ tin cậy (Confidence).
+   * **Bước 6 (Incident Storage & Notification):** Lưu vết sự cố vào cơ sở dữ liệu và phát cảnh báo hành động tức thì tới Telegram.
+
+> **🎯 Mục tiêu cốt lõi:** *"Phát hiện sớm – Phân tích chính xác – Cảnh báo kịp thời"*.
 
 ---
 
@@ -44,8 +51,15 @@ Hệ thống được thiết kế theo mô hình phân tán thực chiến, mô
 AI_Prompt/
 │
 ├── configure.env                   # File cấu hình IP, Port, Token và Password bảo mật
-├── AI-SOC Wazuh Workflow...png     # Sơ đồ kiến trúc luồng dữ liệu tổng quan
-├── README.md                       # Tài liệu kiến trúc và cơ chế hoạt động của dự án
+├── README.md                       # Tài liệu kiến trúc và bằng chứng thực nghiệm của dự án
+│
+├── image/                          # Thư mục tài nguyên sơ đồ kiến trúc & ảnh chụp thực nghiệm
+│   ├── AI-SOC Wazuh Workflow Architecture.png # Sơ đồ luồng dữ liệu và kiến trúc phân tán tổng thể
+│   ├── Screenshot 2026-11-12 182744.png      # Thực nghiệm tạo user trên Windows & Wazuh Event Log
+│   ├── Screenshot 2026-11-12 182826.png      # Bảng điều khiển Orchestrator nhận diện Multi-Stage Attack
+│   ├── Screenshot 2026-11-12 182759.png      # Báo cáo chuỗi tấn công tức thì gửi về Telegram Bot
+│   ├── Screenshot 2026-11-12 182920.png      # Lệnh xóa tài khoản / dọn dấu vết trên Windows CMD
+│   └── Screenshot 2026-11-12 182925.png      # Cảnh báo Telegram khi hacker xóa tài khoản phi tang
 │
 └── orchestrator/                   # Mã nguồn chính của bộ điều phối Orchestrator
     ├── main.py                     # Tiến trình điều phối trung tâm (Vòng lặp canh gác 24/7)
@@ -118,6 +132,83 @@ flowchart LR
 
 ---
 
+## 📸 Kết Quả Thực Nghiệm & Bằng Chứng Thực Chiến (Live Demonstration)
+
+Dưới đây là bằng chứng thực tế thu được trong quá trình kiểm thử xâm nhập thực nghiệm giữa máy tấn công (`windows_1`), hệ thống SIEM Wazuh, bộ điều phối ARGUS-SOC và bot Telegram:
+
+---
+
+### 🧪 Kịch bản 1: Chuỗi tấn công tạo tài khoản ẩn & Leo thang đặc quyền (Multi-Stage Attack)
+
+#### Bước 1: Kẻ tấn công thực thi lệnh trên máy Windows mục tiêu & Wazuh ghi nhận log
+![Thực nghiệm tạo user trên Windows CMD & Wazuh Events](./image/Screenshot%202026-11-12%20182744.png)
+
+* **Hành vi thực thi trên CMD (Admin):**
+  ```cmd
+  net user khanh_de190997 khanh123 /add
+  ```
+* **Phân tích nhật ký Wazuh Dashboard:**
+  Ngay lập tức, hệ thống Wazuh SIEM ghi nhận đồng thời 5 sự kiện bảo mật theo thời gian thực:
+  * `Rule 60109 (Level 8)`: *User account enabled or created* (Event ID 4720).
+  * `Rule 60110 (Level 8)`: *User account changed* (Event ID 4738).
+  * `Rule 60160 (Level 5)`: *Domain Users Group Changed* (Event ID 4728).
+  * `Rule 60170 (Level 5)`: *Users Group Changed* (Event ID 4732).
+
+---
+
+#### Bước 2: ARGUS Orchestrator bóc tách dữ liệu, nhận diện chuỗi tấn công và gửi AI phân tích
+![Bảng điều khiển Orchestrator Console](./image/Screenshot%202026-11-12%20182826.png)
+
+* **Phân tích cơ chế xử lý của Orchestrator:**
+  * Bóc tách chính xác: Người thực hiện `User [khanh]`, tài khoản đích `[khanh_de190997]`, tuyến mạng `Local Console ➔ windows_1 (192.168.100.27)`.
+  * Bộ nhớ trượt `StateTracker` gom 5 sự kiện phát sinh liên tiếp và kích hoạt kịch bản **`[MULTI_STAGE_ATTACK]`**.
+  * Dữ liệu context được gửi ngay lập tức sang máy chủ AI `192.168.100.101` (Qwen2.5-3B) để tổng hợp thành bản tin tác chiến hoàn chỉnh.
+
+---
+
+#### Bước 3: Báo cáo chuỗi tấn công thời gian thực gửi về Telegram Bot
+![Báo cáo Multi-Stage Attack trên Telegram](./image/Screenshot%202026-11-12%20182759.png)
+
+* **Nội dung bản tin tác chiến nhận được qua Telegram:**
+  * **Mục tiêu:** `Local Console (khanh) ➔ windows_1 (192.168.100.27)`.
+  * **Timeline các bước của hacker:**
+    1. `Rule 60160 (Level 5)` ➔ Thêm thành viên vào Security Group None bởi User khanh | MITRE: `T1484`.
+    2. `Rule 60109 (Level 8)` ➔ Tạo tài khoản mới: `khanh_de190997` bởi User khanh | MITRE: `T1098`.
+    3. `Rule 60109 (Level 8)` ➔ User account was enabled (Actor: khanh, Target: khanh_de190997) | MITRE: `T1098`.
+    4. `Rule 60110 (Level 8)` ➔ Thay đổi thuộc tính tài khoản: `[khanh_de190997]` bởi User khanh | MITRE: `T1098`.
+    5. `Rule 60170 (Level 5)` ➔ THÊM tài khoản vào nhóm đặc quyền Users bởi User khanh | MITRE: `T1484`.
+  * **Ý đồ tấn công:** Kẻ tấn công đang phối hợp nhiều kỹ thuật leo thang đặc quyền để chiếm quyền điều khiển hệ thống.
+  * **Phương án ngăn chặn khẩn cấp:**
+    * *Xử lý tức thì:* `netsh advfirewall set allprofiles state on` & cô lập ngay host nạn nhân.
+    * *Phòng ngừa lây lan:* Thu hồi các tài khoản vừa được tạo, quét các tiến trình ngầm và kiểm tra toàn bộ kết nối mạng outbound.
+
+---
+
+### 🧪 Kịch bản 2: Dọn dẹp dấu vết / Xóa tài khoản phi tang (Defense Evasion & Account Removal)
+
+#### Bước 1: Kẻ tấn công xóa tài khoản để che giấu hành vi
+![Lệnh xóa tài khoản trên CMD](./image/Screenshot%202026-11-12%20182920.png)
+
+* **Hành vi thực thi trên CMD (Admin):**
+  ```cmd
+  net user khanh_de190997 /delete
+  ```
+  *(Lệnh được hoàn tất thành công nhằm phi tang tài khoản sau khi xâm nhập).*
+
+---
+
+#### Bước 2: ARGUS-SOC lập tức phát hiện hành vi xóa tài khoản và bắn cảnh báo về Telegram
+![Báo cáo Telegram khi tài khoản bị xóa](./image/Screenshot%202026-11-12%20182925.png)
+
+* **Phân tích cảnh báo từ Telegram Bot:**
+  * **Timeline phát hiện:**
+    1. `Rule 60170 (Level 5)` ➔ GỠ tài khoản khỏi nhóm đặc quyền Users bởi User khanh | MITRE: `T1484`.
+    2. `Rule 60160 (Level 5)` ➔ Gỡ thành viên khỏi Security Group None bởi User khanh | MITRE: `T1484`.
+    3. `Rule 60111 (Level 8)` ➔ **Xóa tài khoản: `khanh_de190997` bởi User khanh** | MITRE: `T1098`, `T1531`.
+  * **Đánh giá nghiệp vụ:** Hệ thống nhận diện hành vi xóa tài khoản bất thường, tự động đối chiếu mã MITRE `T1531` (*Account Access Removal*) và kích hoạt khuyến nghị rà soát toàn bộ kết nối outbound xem dữ liệu có bị đánh cắp trước khi tài khoản bị xóa hay không.
+
+---
+
 ## 🧠 Bản Chất Khi Kết Hợp Thêm AI Vào SOC Là Gì?
 
 Trong các hệ thống SOC truyền thống, SIEM chỉ đóng vai trò là một **bộ lưu trữ và so khớp tĩnh (Rule-based Pattern Matching)**:
@@ -176,4 +267,3 @@ Cách làm này khiến con người phải tự đọc từng dòng log thô, t
 ## 👤 Tác Giả (Author)
 
 * **Hoang Gia Khanh**
-
