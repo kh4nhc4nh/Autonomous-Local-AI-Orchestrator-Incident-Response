@@ -170,3 +170,10 @@ Cách làm này khiến con người phải tự đọc từng dòng log thô, t
 * **Kiến trúc siêu nhẹ & Tiết kiệm tài nguyên:** Bộ điều phối Orchestrator viết bằng Python thuần túy, chiếm dụng chưa tới **30MB RAM**, hoạt động ổn định 24/7 mà không làm ảnh hưởng đến hiệu năng máy chủ.
 * **Chi phí bản quyền = 0 VNĐ:** Thay thế các giải pháp SOAR thương mại đắt đỏ (hàng chục nghìn USD/năm) bằng sự kết hợp giữa các công nghệ mã nguồn mở hàng đầu (*Wazuh + OpenSearch + Ollama + Telegram API*).
 * **Báo cáo chuẩn hóa có chiều sâu:** Mọi thông tin gửi về đều hiển thị rõ ràng: *Mã Rule ID, Level cảnh báo, Tuyến IP Nguồn ➔ Đích, Giao thức kết nối, Hành vi chi tiết, Dự đoán bước tiếp theo và Lệnh xử lý tức thì*.
+
+---
+
+## 👤 Tác Giả (Author)
+
+* **Hoang Gia Khanh**
+
