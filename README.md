@@ -9,17 +9,17 @@
 Hệ thống được thiết kế theo mô hình phân tán thực chiến, mô phỏng đúng hạ tầng mạng của các trung tâm điều hành an ninh mạng (SOC) doanh nghiệp:
 
 ### 📊 Sơ Đồ Luồng Hoạt Động & Kiến Trúc Tổng Thể (Workflow Architecture)
-
+#### 1. Sơ đồ Kiến trúc Nền tảng (Baseline Architecture)
 ![AI-SOC Wazuh Workflow Architecture](./image/AI-SOC%20Wazuh%20Workflow%20Architecture.png)
 
 #### 🔍 Phân Tích Chuyên Sâu Các Phân Vùng Trong Sơ Đồ:
 
-1. **MÁY A – SOC SERVER (Ubuntu Server - `192.168.100.220`):**
+1. **MÁY A – SOC SERVER (Ubuntu Server - `<SOC_SERVER_IP>`):**
    * **Wazuh Core:**
      * *Wazuh Manager (Port 55000):* Quản lý trạng thái và chính sách bảo mật cho toàn bộ Agents.
      * *Wazuh Indexer / OpenSearch (Port 9200):* Lưu trữ, đánh chỉ mục và truy vấn toàn bộ security alerts.
      * *Wazuh Dashboard (Port 443):* Giao diện trực quan hóa dữ liệu và điều tra sự cố.
-   * **Local AI Engine (Ollama - `192.168.100.101:11434`):** Chạy mô hình ngôn ngữ lớn `qwen2.5:3b` chuyên dụng phân tích mã độc hoàn toàn trong mạng LAN nội bộ, bảo mật tuyệt đối không gửi dữ liệu ra ngoài Internet.
+   * **Local AI Engine (Ollama - `<AI_SERVER_IP>:11434`):** Chạy mô hình ngôn ngữ lớn `qwen2.5:3b` chuyên dụng phân tích mã độc hoàn toàn trong mạng LAN nội bộ, bảo mật tuyệt đối không gửi dữ liệu ra ngoài Internet.
    * **Python Orchestrator (Trung tâm điều phối):**
      * *Collectors:* Kéo dữ liệu tự động từ Wazuh Indexer & API theo chu kỳ 3 giây.
      * *Processors:* Bóc tách sâu Windows/Linux events, lọc sạch 85% log rác, duy trì bộ nhớ trượt 5 phút xâu chuỗi tấn công.
@@ -28,7 +28,7 @@ Hệ thống được thiết kế theo mô hình phân tán thực chiến, mô
    * **Database (SQLite):** Lưu vết các sự cố, lịch sử phân tích và trạng thái xử lý của từng cảnh báo.
    * **Telegram Bot Notifier (`@khanh_soc_ai_bot`):** Bắn báo động đỏ trực tiếp tới điện thoại/laptop của SOC Analyst.
 
-2. **MÁY B – ENDPOINT / ATTACK LAB (Windows 10 Pro - `192.168.100.27`):**
+2. **MÁY B – ENDPOINT / ATTACK LAB (Windows 10 Pro - `<TARGET_ENDPOINT_IP>`):**
    * **Wazuh Agent:** Thu thập và đẩy toàn bộ sự kiện hệ thống về Wazuh Manager theo thời gian thực.
    * **Microsoft Sysmon & Windows Event Logs:** Ghi nhận chuyên sâu các sự kiện: tạo tiến trình (Process Creation), kết nối mạng (Network Connections), thao tác tệp tin (File Events), và các nhật ký Security/System/Application.
    * **Attack Simulation (Môi trường giả lập tấn công):** Nơi thực thi các công cụ kiểm thử xâm nhập thực tế: Atomic Red Team, PowerShell Exploitation, Nmap, tạo tài khoản ngầm, leo quyền Admin, xóa log.
@@ -160,9 +160,9 @@ Dưới đây là bằng chứng thực tế thu được trong quá trình ki�
 ![Bảng điều khiển Orchestrator Console](./image/Screenshot%202026-11-12%20182826.png)
 
 * **Phân tích cơ chế xử lý của Orchestrator:**
-  * Bóc tách chính xác: Người thực hiện `User [khanh]`, tài khoản đích `[khanh_de190997]`, tuyến mạng `Local Console ➔ windows_1 (192.168.100.27)`.
+  * Bóc tách chính xác: Người thực hiện `User [khanh]`, tài khoản đích `[khanh_de190997]`, tuyến mạng `Local Console ➔ windows_1 (<TARGET_ENDPOINT_IP>)`.
   * Bộ nhớ trượt `StateTracker` gom 5 sự kiện phát sinh liên tiếp và kích hoạt kịch bản **`[MULTI_STAGE_ATTACK]`**.
-  * Dữ liệu context được gửi ngay lập tức sang máy chủ AI `192.168.100.101` (Qwen2.5-3B) để tổng hợp thành bản tin tác chiến hoàn chỉnh.
+  * Dữ liệu context được gửi ngay lập tức sang máy chủ AI `<AI_SERVER_IP>` (Qwen2.5-3B) để tổng hợp thành bản tin tác chiến hoàn chỉnh.
 
 ---
 
@@ -170,7 +170,7 @@ Dưới đây là bằng chứng thực tế thu được trong quá trình ki�
 ![Báo cáo Multi-Stage Attack trên Telegram](./image/Screenshot%202026-11-12%20182759.png)
 
 * **Nội dung bản tin tác chiến nhận được qua Telegram:**
-  * **Mục tiêu:** `Local Console (khanh) ➔ windows_1 (192.168.100.27)`.
+  * **Mục tiêu:** `Local Console (khanh) ➔ windows_1 (<TARGET_ENDPOINT_IP>)`.
   * **Timeline các bước của hacker:**
     1. `Rule 60160 (Level 5)` ➔ Thêm thành viên vào Security Group None bởi User khanh | MITRE: `T1484`.
     2. `Rule 60109 (Level 8)` ➔ Tạo tài khoản mới: `khanh_de190997` bởi User khanh | MITRE: `T1098`.
