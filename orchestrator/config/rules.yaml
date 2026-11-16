@@ -1,0 +1,79 @@
+detection_rules:
+  # ==============================================================================
+  # 🎯 CẤU HÌNH BỘ LỌC VÀ ĐÁNH GIÁ MỐI ĐE DỌA (ENTERPRISE SOC AI)
+  # ==============================================================================
+  # Thay thế cơ chế Signature/Port tĩnh bằng Phân tích Hành vi & MITRE ATT&CK
+  # ==============================================================================
+
+  # Ngưỡng Level tối thiểu để hệ thống bắt đầu xử lý (Wazuh Rule Level)
+  min_alert_level: 5
+
+  # Mức Level được coi là CỰC KỲ NGUY HIỂM (Kích hoạt báo động đỏ + AI dự đoán hành vi tiếp theo)
+  critical_alert_level: 10
+
+  # Cửa sổ tương quan (Correlation Window) theo phiên/thực thể (phút)
+  # Hệ thống phân vùng theo từng Session ID/Actor nên không lo bị lẫn với tiến trình khác
+  correlation_window_minutes: 10
+
+  # Ngưỡng số lượng sự kiện trong cùng 1 Session/Actor để xác định Multi-Stage Attack
+  multi_event_threshold: 2
+
+  # Cửa sổ thời gian khử trùng lặp (Deduplication) cho các alert lặp liên tiếp (giây)
+  dedup_window_seconds: 15
+
+  # ==============================================================================
+  # 🚫 DANH SÁCH RULE ID BỊ LOẠI TRỪ (NOISE / SPAM FILTER)
+  # Các tác vụ bảo trì định kỳ bình thường của hệ điều hành
+  # ==============================================================================
+  ignored_rule_ids:
+    - 60642   # Software protection service scheduled
+    - 5501    # PAM: Login session opened
+    - 5502    # PAM: Login session closed
+    - 5402    # Successful sudo to ROOT executed (khi bạn gõ sudo trên Linux)
+    - 550     # Integrity checksum changed (scan FIM bình thường)
+
+  # ==============================================================================
+  # ⚔️ CHIẾN THUẬT MITRE ATT&CK MỨC ĐỘ CAO (HIGH RISK TACTICS)
+  # Thay vì dựa vào tên lệnh cố định (dễ bị obfuscation/bypass), bất kỳ hành vi nào
+  # thuộc các Chiến thuật hiểm yếu này đều được tự động nâng cấp thành CRITICAL:
+  # ==============================================================================
+  high_risk_tactics:
+    - "Privilege Escalation"   # TA0004: Leo thang đặc quyền (Admin, Token Impersonation)
+    - "Defense Evasion"        # TA0005: Xóa log, tắt Defender, che giấu tiến trình
+    - "Credential Access"      # TA0006: Trộm mật khẩu, Dump LSASS, Brute Force
+    - "Impact"                 # TA0040: Phá hoại, xóa Volume Shadow Copy, Ransomware
+    - "Lateral Movement"       # TA0008: Di chuyển ngang qua SMB, WinRM, RDP
+    - "Command and Control"    # TA0011: Kết nối máy chủ điều khiển C2
+
+  # ==============================================================================
+  # 🧰 LIVING-OFF-THE-LAND BINARIES (LOLBins) ĐƯỢC GIÁM SÁT HÀNH VI
+  # Kẻ tấn công thường dùng chính công cụ có sẵn của Windows/Linux để tấn công.
+  # Hệ thống giám sát mọi hành vi bất thường từ các binary này bất kể port nào:
+  # ==============================================================================
+  monitored_lolbins:
+    - "powershell"
+    - "cmd.exe"
+    - "certutil"
+    - "rundll32"
+    - "regsvr32"
+    - "mshta"
+    - "cscript"
+    - "wscript"
+    - "bitsadmin"
+    - "wmic"
+    - "vssadmin"
+    - "schtasks"
+    - "nltest"
+    - "net.exe"
+    - "net1.exe"
+    - "whoami"
+    - "curl.exe"
+    - "tar.exe"
+
+  # ==============================================================================
+  # 🌐 PHÂN TÍCH BẤT THƯỜNG MẠNG (DYNAMIC NETWORK HEURISTICS)
+  # Không giới hạn ở port 4444 hay 1337. Hệ thống gắn cờ bất kỳ kết nối mạng nào:
+  # - Bắt nguồn từ LOLBin hoặc Script Engine (dù ra Port 80, 443 hay Port lạ)
+  # - Lưu lượng tới dải IP ngoại mạng hoặc cổng dịch vụ từ xa (RDP:3389, SMB:445)
+  # ==============================================================================
+  flag_network_anomalies: true
