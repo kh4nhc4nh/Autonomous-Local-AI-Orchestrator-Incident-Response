@@ -9,7 +9,7 @@
 Hệ thống được thiết kế theo mô hình phân tán thực chiến, mô phỏng đúng hạ tầng mạng của các trung tâm điều hành an ninh mạng (SOC) doanh nghiệp:
 
 ### 📊 Sơ Đồ Luồng Hoạt Động & Kiến Trúc Tổng Thể (Workflow Architecture)
-#### 1. Sơ đồ Kiến trúc Nền tảng (Baseline Architecture)
+
 ![AI-SOC Wazuh Workflow Architecture](./image/AI-SOC%20Wazuh%20Workflow%20Architecture.png)
 
 #### 🔍 Phân Tích Chuyên Sâu Các Phân Vùng Trong Sơ Đồ:
