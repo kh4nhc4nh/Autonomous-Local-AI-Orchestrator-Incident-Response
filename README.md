@@ -55,6 +55,7 @@ AI_Prompt/
 │
 ├── image/                          # Thư mục tài nguyên sơ đồ kiến trúc & ảnh chụp thực nghiệm
 │   ├── AI-SOC Wazuh Workflow Architecture.png # Sơ đồ luồng dữ liệu và kiến trúc phân tán tổng thể
+│   ├── AI-SOC AI Workflow & Dependency Architecture.png # Sơ đồ luồng hoạt động của AI & cấu hình chi phối
 │   ├── Screenshot 2026-11-12 182744.png      # Thực nghiệm tạo user trên Windows & Wazuh Event Log
 │   ├── Screenshot 2026-11-12 182826.png      # Bảng điều khiển Orchestrator nhận diện Multi-Stage Attack
 │   ├── Screenshot 2026-11-12 182759.png      # Báo cáo chuỗi tấn công tức thì gửi về Telegram Bot
@@ -129,6 +130,52 @@ flowchart LR
 
 ### 5. Phát cảnh báo hành động trực tiếp (Actionable Dispatching)
 * Báo cáo được biên soạn ngắn gọn theo chuẩn Markdown di động, gửi tức thì qua Telegram Bot tới người quản trị trong vòng **dưới 2 giây**, giúp đội ngũ bảo mật ra quyết định ngay trên điện thoại mà không cần phải mở máy tính tra cứu SIEM.
+
+---
+
+## 🧠 Kiến Trúc Vận Hành AI & Các Tệp Cấu Hình Chi Phối (AI Workflow & Governance Architecture)
+
+Sơ đồ dưới đây minh họa chi tiết luồng vận hành của AI trong hệ thống ARGUS-SOC: từ lúc tiếp nhận các sự kiện an ninh tổng quát (Security Ingestion), qua tầng tiền xử lý & tương quan phả hệ tiến trình, cho đến khi mô hình AI cục bộ (100% On-Premise LAN) biên dịch thành báo cáo tác chiến gửi về Telegram. Mọi hành vi của AI đều được kiểm soát chặt chẽ bởi các tệp cấu hình và quy tắc nghiệp vụ:
+
+![AI-SOC AI Workflow & Dependency Architecture](./image/AI-SOC%20AI%20Workflow%20%26%20Dependency%20Architecture.png)
+
+### 📌 Phân Tích Cơ Chế Hoạt Động Của AI & Sự Phụ Thuộc Vào Các File Cấu Hình:
+
+Hệ thống vận hành theo mô hình phân tầng **Kiểm soát chính sách (Governance) ➔ Đường ống thực thi (Runtime Pipeline)**:
+
+#### 1. Tầng Cấu hình & Quy tắc kiểm soát (Configuration & Governance Layer):
+* **`configure.env` (Môi trường & Kết nối nội bộ):**
+  - Quản lý việc lựa chọn mô hình AI cục bộ (`OLLAMA_MODEL=qwen2.5:3b`).
+  - Định tuyến kết nối mạng LAN thuần túy (`OLLAMA_BASE_URL=http://<AI_SERVER_IP>:11434`), không lưu bất kỳ API Cloud nào, cam kết 100% Air-Gapped bảo mật dữ liệu.
+* **`rules.yaml` (Ngưỡng cảnh báo & Chính sách tương quan):**
+  - Xác lập ngưỡng phân loại độ nguy hiểm (`min_alert_level: 5`, `critical_alert_level: 10`).
+  - Quy định cửa sổ trượt thời gian (`correlation_window_minutes: 10`) và bộ đếm khử trùng lặp (`dedup_window_seconds: 15`).
+  - Cung cấp danh mục giám sát công cụ LOLBins (`powershell`, `cmd`, `certutil`, `rundll32`...) và danh sách Chiến thuật MITRE hiểm yếu (`Privilege Escalation`, `Defense Evasion`, `Credential Access`, `Impact`...).
+* **`system_prompt.txt` (Khuôn khổ tư duy & Rào chắn bảo vệ AI):**
+  - Thiết lập vai trò chuyên gia an ninh mạng cấp cao (Tier-3 SOC Analyst).
+  - Áp đặt 4 khuôn mẫu định dạng báo cáo nghiêm ngặt (`SINGLE_ALERT`, `CRITICAL_SINGLE_ALERT`, `RECONNAISSANCE_BURST`, `MULTI_STAGE_ATTACK`).
+  - Rào chắn ngôn ngữ: Bắt buộc 100% tiếng Việt chuyên ngành, triệt tiêu ảo giác và câu từ thừa thãi.
+  - Bắt buộc sinh câu lệnh xử lý ứng cứu thực tế (PowerShell/CMD) để quản trị viên có thể thi hành ngay.
+
+#### 2. Tầng Tiền xử lý & Điều phối suy luận (Runtime Data Middleware & AI Inference):
+* **`alert_parser.py` (Làm sạch & Bóc tách phả hệ tiến trình):**
+  - Chuẩn hóa cấu trúc log thô từ Wazuh SIEM và Sysmon.
+  - Trích xuất định danh tiến trình cha-con (`PID` & `PPID`) để dựng cây phả hệ (Process Lineage).
+  - Lọc bỏ các tiến trình văn phòng lành tính (OneDrive, Edge, Chrome) để tránh báo động giả C2.
+  - Tự động tra cứu và bổ sung mã chiến thuật MITRE ATT&CK.
+* **`state_tracker.py` (Bộ máy tương quan & Định danh kịch bản):**
+  - Phân vùng theo dõi độc lập theo phiên người dùng (`Entity-Centric Session Tracking`).
+  - Khử trùng lặp sự kiện rác phát sinh dồn dập (Noise Deduplication).
+  - Đánh giá tiến trình Kill Chain: Tự động phân loại chính xác các đợt rà quét thăm dò (`RECONNAISSANCE_BURST`) và chuỗi tấn công leo thang nguy hiểm (`MULTI_STAGE_ATTACK`).
+* **`ollama_client.py` (Điều phối Prompt & Tham số suy luận):**
+  - Đóng gói dữ liệu bóc tách vào prompt có cấu trúc.
+  - Thiết lập tham số nhiệt độ khắt khe (`temperature: 0.3`) để AI luôn bám sát dữ liệu thực tế, không bịa đặt.
+  - Tích hợp bộ máy dự phòng (`_build_fallback_report`) đảm bảo hệ thống luôn có báo cáo chuẩn SOC ngay cả khi máy chủ AI gặp sự cố mạng.
+* **`Local LLM (Ollama - On-Premises LAN)` (Bộ não phân tích cục bộ):**
+  - Chạy mô hình ngôn ngữ lớn chuyên dụng trong mạng LAN nội bộ.
+  - Xử lý phân tích đa chiều, giải mã ý đồ kẻ tấn công, dự đoán bước đi tiếp theo và đưa ra khuyến nghị phòng thủ.
+* **`telegram_notifier.py` (Phát cảnh báo tác chiến):**
+  - Định dạng bản tin Markdown trực quan, bắn thông báo tức thì (< 2 giây) về Telegram Bot để SOC Analyst ra quyết định khẩn cấp.
 
 ---
 
@@ -264,6 +311,38 @@ Cách làm này khiến con người phải tự đọc từng dòng log thô, t
 
 ---
 
-## 👤 Tác Giả (Author)
+## 🚀 Kế Hoạch Phát Triển Trong Tương Lai (Future Roadmap & Enhancements)
+
+Hệ thống ARGUS-SOC hiện tại đang vận hành rất ổn định ở mô hình **100% On-Premise Local AI Pipeline**. Để tiến tới một trung tâm điều hành an ninh mạng tự hành toàn diện cấp doanh nghiệp (Enterprise Autonomous SOC), các tính năng và bản cập nhật sau sẽ được nghiên cứu và triển khai trong tương lai:
+
+### 1. 🧠 Nâng cấp Kiến trúc Hybrid AI Dual-Brain (Vượt qua giới hạn Local LLM)
+* **Không chỉ phụ thuộc vào một mình Local Ollama:** Mặc dù Local LLM (`qwen2.5:3b`) đảm bảo 100% tính riêng tư, nhưng với các cuộc tấn công diện rộng (APT) cực kỳ phức tạp đòi hỏi khả năng lý luận bậc cao, hệ thống sẽ tiến hóa lên mô hình **Hybrid Dual-Brain (Bộ não kép)**:
+  * **Tầng 1 (Local Edge AI - Ollama/Qwen):** Đảm nhiệm 95% sự kiện thông thường, đợt rà quét trinh sát (`RECONNAISSANCE_BURST`) và giám sát mạng nội bộ. Hoàn toàn miễn phí, tốc độ phản hồi < 1s, giữ dữ liệu tuyệt đối trong mạng LAN.
+  * **Tầng 2 (Cloud Deep Brain - Gemini Pro / Claude 3.5 Sonnet / GPT-4o):** Tự động kích hoạt khi phát hiện chuỗi tấn công leo thang nguy hiểm (`MULTI_STAGE_ATTACK`) hoặc sự kiện phá hoại nghiêm trọng (`CRITICAL_SINGLE_ALERT`). Dữ liệu gửi đi sẽ được làm sạch và ẩn danh hóa (Anonymized Context), giúp phân tích sâu ý đồ hacker và đối chiếu tình báo mối đe dọa toàn cầu.
+
+### 2. ⚡ Tự Động Hóa Ứng Cứu Khẩn Cấp (Autonomous SOAR & Active Response)
+* **Tương tác 1-Click trên Telegram:** Bổ sung các nút bấm tương tác (Inline Buttons) ngay dưới bản tin Telegram:
+  * `[🔒 Cô lập Host ngay lập tức]`: Tự động gọi Wazuh Active Response ngắt kết nối mạng máy nạn nhân (chỉ chừa cổng SIEM).
+  * `[🚫 Vô hiệu hóa tài khoản hacker]`: Thực thi lệnh khóa user vừa được tạo trái phép.
+  * `[🗑️ Cách ly tệp thực thi độc hại]`: Đưa file dropped nghi vấn vào vùng cách ly (Quarantine).
+* **Playbook tự hành theo ngữ cảnh:** Tự động thực thi kịch bản ứng cứu mà không cần can thiệp thủ công đối với các hành vi vi phạm nghiêm trọng đã được kiểm chứng (như lệnh xóa log `wevtutil cl` hoặc ransomware canary file).
+
+### 3. 📈 Mở Rộng Kiến Trúc Hướng Sự Kiện & Chịu Tải Cao (Event-Driven Scalability)
+* **Tích hợp Message Queue (Apache Kafka / RabbitMQ):** Thay thế cơ chế kéo log tuần tự (API Polling) bằng luồng xử lý bất đồng bộ theo sự kiện (Event-Driven Streaming), sẵn sàng đáp ứng lưu lượng từ **5.000 – 10.000 EPS (Events Per Second)** của môi trường doanh nghiệp lớn.
+* **Bộ nhớ trạng thái phân tán (Redis In-Memory State Cache):** Chuyển đổi bộ nhớ trượt `state_tracker` từ RAM Python sang Redis Cluster có thời hạn tồn tại (TTL), đảm bảo việc tương quan chuỗi tấn công không bị gián đoạn ngay cả khi hệ thống khởi động lại.
+
+### 4. 🌐 Tích Hợp Tình Báo Mối Đe Dọa (Threat Intelligence - CTI)
+* Tự động tra cứu và đối chiếu các IoC (Indicators of Compromise) phát sinh trong log:
+  * Kiểm tra Hash file nghi ngờ qua **VirusTotal API**.
+  * Kiểm tra IP ngoại mạng đáng ngờ qua **AbuseIPDB** và **AlienVault OTX**.
+  * Tự động làm giàu ngữ cảnh (Context Enrichment) trước khi đưa dữ liệu cho AI phân tích.
+
+### 5. 🎯 Phân Tích Hành Vi Người Dùng & Thực Thể (UEBA - User & Entity Behavior Analytics)
+* Tự động học tập và xây dựng **Baseline hành vi bình thường** (giờ đăng nhập, lượng file truy cập, danh mục lệnh thường chạy) của từng tài khoản.
+* Phát hiện sớm các kỹ thuật tấn công tinh vi lạm dụng công cụ hợp lệ (Living-off-the-Land - LOLBins) ngay cả khi kẻ tấn công không kích hoạt bất kỳ cảnh báo rule tĩnh nào của SIEM.
+
+---
+
+## 👤 Author
 
 * **Hoang Gia Khanh**
